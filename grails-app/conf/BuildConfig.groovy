@@ -14,8 +14,6 @@ grails.project.dependency.resolution = {
 	}
 
 	plugins {
-		// runtime ':biomart-domain:16.2-SNAPSHOT'
-
 		build ':release:3.1.2', ':rest-client-builder:2.1.1', {
 			export = false
 		}
