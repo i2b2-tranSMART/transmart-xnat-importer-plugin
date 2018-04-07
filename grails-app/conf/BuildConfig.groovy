@@ -17,6 +17,10 @@ grails.project.dependency.resolution = {
 		mavenRepo 'https://repo.transmartfoundation.org/content/repositories/public/'
 	}
 
+	dependencies {
+		test 'org.grails:grails-datastore-test-support:1.0.2-grails-2.4'
+	}
+
 	plugins {
 		compile ':transmart-shared:18.1-SNAPSHOT'
 
