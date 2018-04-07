@@ -1,253 +1,215 @@
-import org.transmart.searchapp.ImportXnatConfiguration;
-import org.transmart.searchapp.ImportXnatVariable;
+import groovy.util.logging.Slf4j
 import groovy.xml.MarkupBuilder
+import org.springframework.beans.factory.InitializingBean
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
+import org.transmart.plugin.shared.UtilService
+import org.transmart.searchapp.ImportXnatConfiguration
+import org.transmart.searchapp.ImportXnatVariable
 
-/**
- * ImportXnat controller.
- */
-class ImportXnatController {
+@Slf4j('logger')
+class ImportXnatController implements InitializingBean {
 
-	def grailsApplication
+	static allowedMethods = [delete: 'POST', save: 'POST', update: 'POST']
+	static defaultAction = 'list'
 
-	// the delete, save and update actions only accept POST requests
-	static Map allowedMethods = [delete: 'POST', save: 'POST', update: 'POST']
+	@Autowired
+	private UtilService utilService
 
-	def index = {
-		redirect action: list, params: params
-	}
+	@Value('${org.transmart.importxnatplugin.location:}')
+	private String importXnatPluginLocation
 
-	def list = {
-		if (!params.max) {
-			params.max = grailsApplication.config.com.recomdata.admin.paginate.max
+	@Value('${com.recomdata.admin.paginate.max:0}')
+	private String paginateMax
+
+	def list(Integer max) {
+		if (!max) {
+			params.max = paginateMax
 		}
-		[importXnatConfigurationList: ImportXnatConfiguration.list(params)]
+		[importXnatConfigurationList: ImportXnatConfiguration.list(params),
+		 ImportXnatConfigurationCount: ImportXnatConfiguration.count()]
 	}
 
-	def show = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
+	def show(ImportXnatConfiguration importXnatConfiguration) {
 		if (!importXnatConfiguration) {
 			flash.message = "Import XNAT Configuration not found with id $params.id"
-			redirect action:list
+			redirect action: 'list'
 			return
 		}
 		[importXnatConfiguration: importXnatConfiguration]
 	}
 
-	def delete = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
-		if (!importXnatConfiguration) {
+	def delete(ImportXnatConfiguration importXnatConfiguration) {
+		if (importXnatConfiguration) {
+			importXnatConfiguration.delete()
+			flash.message = "Import XNAT Configuration $params.id deleted."
+		}
+		else {
 			flash.message = "Import XNAT Configuration not found with id $params.id"
-			redirect action:list
-			return
 		}
 
-		importXnatConfiguration.delete()
-
-		flash.message = "Import XNAT Configuration $params.id deleted."
-		redirect(action: list)
+		redirect action: 'list'
 	}
 
-	def delete_coupling = {
-		def importXnatVariable = ImportXnatVariable.get(params.id)
+	def delete_coupling(ImportXnatVariable importXnatVariable) {
 		if (!importXnatVariable) {
 			flash.message = "Import XNAT Variable not found with id $params.id"
-			redirect action: create_coupling, id: params.configId
+			redirect action: 'create_coupling', id: params.configId
 			return
 		}
 
 		importXnatVariable.delete()
 
 		flash.message = "Variable $params.id deleted."
-		redirect action: create_coupling, id: params.configId
+		redirect action: 'create_coupling', id: params.configId
 	}
 
-	def edit = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
+	def edit(ImportXnatConfiguration importXnatConfiguration) {
 		if (!importXnatConfiguration) {
 			flash.message = "Import XNAT Configuration not found with id $params.id"
-			redirect(action: list)
+			redirect action: 'list'
 			return
 		}
 
 		[importXnatConfiguration: importXnatConfiguration]
 	}
 
-	/**
-	 * Update action, called when an existing Requestmap is updated.
-	 */
-	def update = {
-		def importXnatConfiguration= ImportXnatConfiguration.get(params.id)
+	def update(ImportXnatConfiguration importXnatConfiguration) {
 		if (!importXnatConfiguration) {
 			flash.message = "Import XNAT Configuration not found with id $params.id"
-			redirect(action: edit, id :params.id)
+			redirect action: 'edit', id: params.id
 			return
 		}
 
-		long version = params.version.toLong()
+		long version = params.long('version', 0)
 		if (importXnatConfiguration.version > version) {
-			importXnatConfiguration.errors.rejectValue 'version', "importxnatconfiguration.optimistic.locking.failure",
-				"Another user has updated this Configuration while you were editing."
+			importXnatConfiguration.errors.rejectValue 'version', 'importxnatconfiguration.optimistic.locking.failure',
+					'Another user has updated this Configuration while you were editing.'
 			render view: 'edit', model: [importXnatConfiguration: importXnatConfiguration]
 			return
 		}
 
 		importXnatConfiguration.properties = params
 		if (importXnatConfiguration.save()) {
-			redirect action: show, id: importXnatConfiguration.id
+			redirect action: 'show', id: importXnatConfiguration.id
 		}
 		else {
 			render view: 'edit', model: [importXnatConfiguration: importXnatConfiguration]
 		}
 	}
 
-	def create = {
+	def create() {
 		[importXnatConfiguration: new ImportXnatConfiguration(params)]
 	}
 
-	def create_coupling = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
-		def importXnatVariable = new ImportXnatVariable(params)
-
+	def create_coupling(ImportXnatConfiguration importXnatConfiguration) {
 		if (!importXnatConfiguration) {
 			flash.message = "Import XNAT Configuration not found with id $params.id"
-			redirect(action: list)
+			redirect action: 'list'
 			return
 		}
 
-		def importXnatVariableList = importXnatConfiguration.variables
-		[importXnatVariable: importXnatVariable, importXnatVariableList: importXnatVariableList, importXnatConfiguration: importXnatConfiguration]
+		[importXnatVariable: new ImportXnatVariable(params),
+		 importXnatVariableList: importXnatConfiguration.variables,
+		 importXnatConfiguration: importXnatConfiguration]
 	}
 
-	/**
-	 * Save action, called when a new Requestmap is created.
-	 */
-	def save = {
-		def importXnatConfiguration = new ImportXnatConfiguration(params)
+	def save() {
+		ImportXnatConfiguration importXnatConfiguration = new ImportXnatConfiguration(params)
 		if (importXnatConfiguration.save()) {
-			redirect action: create_coupling, id: importXnatConfiguration.id
+			redirect action: 'create_coupling', id: importXnatConfiguration.id
 		}
 		else {
 			render view: 'create', model: [importXnatConfiguration: importXnatConfiguration]
 		}
 	}
-	
-	def save_coupling = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
-		def importXnatVariable = new ImportXnatVariable(params)
-		def importXnatVariableList = importXnatConfiguration.variables
+
+	def save_coupling(ImportXnatConfiguration importXnatConfiguration) {
+		ImportXnatVariable importXnatVariable = new ImportXnatVariable(params)
 		importXnatVariable.configuration = importXnatConfiguration
 
 		if (!importXnatVariable.save()) {
-			render view: 'create_coupling', model: [importXnatVariable: importXnatVariable, importXnatConfiguration: importXnatConfiguration, importXnatVariableList: importXnatVariableList]
-		} else {
-			redirect action: create_coupling, id: importXnatConfiguration.id
+			render view: 'create_coupling', model: [
+					importXnatVariable: importXnatVariable,
+					importXnatConfiguration: importXnatConfiguration,
+					importXnatVariableList: importXnatConfiguration.variables]
+		}
+		else {
+			redirect action: 'create_coupling', id: importXnatConfiguration.id
 		}
 	}
 
-	def import_wizard = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
+	def import_wizard(ImportXnatConfiguration importXnatConfiguration) {
 		if (!importXnatConfiguration) {
 			flash.message = "Import XNAT Configuration not found with id $params.id"
-			redirect(action: list)
+			redirect action: 'list'
 			return
 		}
 
 		[importXnatConfiguration: importXnatConfiguration]
 	}
 
-	def import_variables = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
-		
-		def password = params.password
-		if (password == "") {
-			flash.message = "Please enter XNAT password"
-			redirect action: import_wizard, id: importXnatConfiguration.id
-		} else {
-		
-			export()
-
-			def url = importXnatConfiguration.url
-			def username = importXnatConfiguration.username
-			def project = importXnatConfiguration.project
-			def node = importXnatConfiguration.node
-			//def kettledir = (getTransmartDataLocation() + "/env/data-integration/")
-			def kettledir = (getScriptsLocation() + "/xnattotransmartlink/")
-			def datadir = (getScriptsLocation() + "/xnattotransmartlink/")
-
-			def cmd = "python " +
-					getScriptsLocation() +
-					"/xnattotransmartlink/downloadscript.py" +
-					" ${url} ${username} ${password} ${project} ${node} ${kettledir} ${datadir}"
-			log.debug(cmd)
-			def process = (cmd).execute(null, new File(getScriptsLocation() + "/xnattotransmartlink"))
-			process.waitFor()
-			def inText = process.in.text
-			def errText = process.err.text
-			if (errText) {
-				log.error(errText)
-				flash.message = "${errText}</br>${inText}"
-			} else {
-				log.info(inText)
-				flash.message = inText
-			}
-			redirect action: import_wizard, id: importXnatConfiguration.id
+	def import_variables(ImportXnatConfiguration importXnatConfiguration, String password) {
+		if (!password) {
+			flash.message = 'Please enter XNAT password'
+			redirect action: 'import_wizard', id: importXnatConfiguration.id
+			return
 		}
 
-		return
+		export()
+
+		String cmd = 'python ' + importXnatPluginLocation + '/xnattotransmartlink/downloadscript.py' +
+				' ' + importXnatConfiguration.url +
+				' ' + importXnatConfiguration.username +
+				' ' + password +
+				' ' + importXnatConfiguration.project +
+				' ' + importXnatConfiguration.node +
+				' ' + importXnatPluginLocation + '/xnattotransmartlink/' + // kettledir
+				' ' + importXnatPluginLocation + '/xnattotransmartlink/'   // datadir
+		logger.debug cmd
+		Process process = cmd.execute((List)null, new File(importXnatPluginLocation, 'xnattotransmartlink'))
+		process.waitFor()
+		String inText = process.in.text
+		String errText = process.err.text
+		if (errText) {
+			logger.error errText
+			flash.message = errText + '</br>' + inText
+		}
+		else {
+			logger.info inText
+			flash.message = inText
+		}
+
+		redirect action: 'import_wizard', id: importXnatConfiguration.id
 	}
 
-	def export = {
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
-		def importXnatVariableList = importXnatConfiguration.variables
-		def project = importXnatConfiguration.project
-		def xmlFile = (getScriptsLocation() + "/xnattotransmartlink/${project}.xml")
-		def writer = new FileWriter(new File(xmlFile))
-		def xml = new MarkupBuilder(writer)
-
-		xml.project(name: project) {
+	def export(ImportXnatConfiguration importXnatConfiguration) {
+		String project = importXnatConfiguration.project
+		new MarkupBuilder(new FileWriter(new File(importXnatPluginLocation, 'xnattotransmartlink/' + project + '.xml'))).project(name: project) {
 			variables {
-				importXnatVariableList.each{item->
-					variable(
-						name: item.name,
-						dataType: item.datatype,
-						url: item.url
-					)
+				for (ImportXnatVariable item in importXnatConfiguration.variables) {
+					variable name: item.name, dataType: item.datatype, url: item.url
 				}
-				
 			}
 		}
 	}
 
-	def downloadXml = {
-		export();
+	def downloadXml(ImportXnatConfiguration importXnatConfiguration) {
+		export()
 
-		def importXnatConfiguration = ImportXnatConfiguration.get(params.id)
-		def importXnatVariable = new ImportXnatVariable(params)
-		def importXnatVariableList = importXnatConfiguration.variables
-		def project = importXnatConfiguration.project
+		File file = new File(importXnatPluginLocation, 'xnattotransmartlink/' + importXnatConfiguration.project + '.xml')
+		utilService.sendDownload response, "application/xml;charset='utf8'", file.name, file.newInputStream()
 
-		def xmlFile = (getScriptsLocation() + "/xnattotransmartlink/${project}.xml")
-		def file = new File(xmlFile)
-		response.setContentType("application/xml;charset='utf8'")
-		response.setHeader("Content-disposition", "attachment;filename=${file.getName()}")
-		response.outputStream << file.newInputStream()
-		
-		render view: 'create_coupling', model: [importXnatVariable: importXnatVariable, importXnatConfiguration: importXnatConfiguration, importXnatVariableList: importXnatVariableList]
+		render view: 'create_coupling', model: [
+				importXnatVariable     : new ImportXnatVariable(params),
+				importXnatConfiguration: importXnatConfiguration,
+				importXnatVariableList : importXnatConfiguration.variables]
 	}
 
-	def getTransmartDataLocation = {
-		def dir = grailsApplication.config.org.transmart.data.location
-		if (dir.isEmpty()) {
-			dir = grailsAttributes.getApplicationContext().getResource("/").getFile().getParentFile().getParentFile().toString() + "/transmart-data"
+	void afterPropertiesSet() {
+		if (!importXnatPluginLocation) {
+			importXnatPluginLocation = applicationContext.getResource('/').file.parentFile.parentFile.path +
+					'/transmart-xnat-importer-plugin/scripts'
 		}
-		return dir
-	}
-
-	def getScriptsLocation = {
-		def dir = grailsApplication.config.org.transmart.importxnatplugin.location
-		if (dir.isEmpty()) {
-			dir = grailsAttributes.getApplicationContext().getResource("/").getFile().getParentFile().getParentFile().toString() + "/transmart-xnat-importer-plugin/scripts"
-		}
-		return dir
 	}
 }
