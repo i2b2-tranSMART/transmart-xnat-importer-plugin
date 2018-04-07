@@ -20,7 +20,7 @@ class ImportXnatController implements InitializingBean {
 	private String importXnatPluginLocation
 
 	@Value('${com.recomdata.admin.paginate.max:0}')
-	private String paginateMax
+	private int paginateMax
 
 	def list(Integer max) {
 		if (!max) {
